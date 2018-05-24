@@ -1,0 +1,493 @@
+---
+title             : "The title"
+shorttitle        : "Title"
+
+author: 
+  - name          : "John E. Scofield"
+    affiliation   : "1"
+    corresponding : yes    # Define only one corresponding author
+    address       : "Postal address"
+    email         : "wildandcrazyemail@mizzzz.edu"
+  - name          : "Erin M. Buchanan"
+    affiliation   : "2"
+
+affiliation:
+  - id            : "1"
+    institution   : "University of Missouri"
+  - id            : "2"
+    institution   : "Missouri State University"
+
+author_note: >
+  Complete departmental affiliations for each author (note the indentation, if you start a new paragraph).
+
+  Enter author note here.
+
+abstract: >
+  Enter abstract here (note the indentation, if you start a new paragraph).
+  
+keywords          : "keywords"
+wordcount         : "X"
+
+bibliography      : ["BiasTwoRefs.bib"]
+
+figsintext        : no
+figurelist        : no
+tablelist         : no
+footnotelist      : no
+lineno            : yes
+
+lang              : "english"
+class             : "man"
+output            : papaja::apa6_pdf
+---
+
+```{r include = FALSE}
+library("papaja")
+```
+
+
+# Method
+
+##Data Generation and ANOVA functions
+```{r mvtnorm-code, eval=FALSE, include=FALSE}
+####data generation manipulation####
+library(mvtnorm)
+library(reshape)
+
+muvec <- c(0.00,0.00,1.20,1.20)
+meanmu <- mean(muvec)
+sigb <- sum((muvec-meanmu)^2)/4
+eta2p <- sigb/(sigb+1)
+k <- length(muvec)
+nsim <- 1000
+njs <- c(10,20,30,40,50,60,70,80,90,100)
+BIASmat <- matrix(NA,nrow=length(njs),ncol=3)
+rownames(BIASmat) <- njs
+colnames(BIASmat) <- c("eta2","epsilon2","omega2")
+RMSEmat <- matrix(NA,nrow=length(njs),ncol=3)
+rownames(RMSEmat) <- njs
+colnames(RMSEmat) <- c("eta2","epsilon2","omega2")
+SDmat <- matrix(NA,nrow=length(njs),ncol=3)
+rownames(SDmat) <- njs
+colnames(SDmat) <- c("eta2","epsilon2","omega2")
+niter <- 1
+
+for (nj in njs){
+  x <- matrix(NA,nrow=nj,ncol=4)
+  eta2 <- rep(NA,nsim)
+  epsilon2 <- rep(NA,nsim)
+  omega2 <- rep(NA,nsim)
+  for (ii in 1: nsim){
+    #y <- c(rnorm(n=nj,mean=muvec[1],sd=1),
+    #       rnorm(n=nj,mean=muvec[2],sd=1),
+    #       rnorm(n=nj,mean=muvec[3],sd=1),
+    #       rnorm(n=nj,mean=muvec[4],sd=1))
+    
+    sigma = matrix(c(1,0,0,0,
+                     0,1,0,0,
+                     0,0,1,0,
+                     0,0,0,1), nrow = 4, ncol = 4)
+    
+    y = melt(rmvnorm(n = nj, muvec, sigma))$value
+    
+    x <- as.factor(c(rep("mu1",nj),rep("mu2",nj),
+                     rep("mu3",nj),rep("mu4",nj)))
+    
+    res <- anova(aov(y~x))
+    res <- as.matrix(res)
+    SSb <- res[1,2]
+    SSt <- res[1,2] + res[2,2]
+    MSw <- res[2,3]
+    
+    eta2[ii] <- SSb/SSt
+    epsilon2[ii] <- (SSb - 3*MSw)/SSt
+    omega2[ii] <- (SSb - 3*MSw)/(SSt+MSw)
+  }  
+  BIASmat[niter,1] <- mean(eta2) - eta2p
+  BIASmat[niter,2] <- mean(epsilon2) - eta2p
+  BIASmat[niter,3] <- mean(omega2) - eta2p
+  RMSEmat[niter,1] <- sqrt(sum((eta2-eta2p)^2)/nsim)
+  RMSEmat[niter,2] <- sqrt(sum((epsilon2-eta2p)^2)/nsim)
+  RMSEmat[niter,3] <- sqrt(sum((omega2-eta2p)^2)/nsim)
+  SDmat[niter,1] <- sqrt(sum((eta2-mean(eta2))^2)/nsim)
+  SDmat[niter,2] <- sqrt(sum((epsilon2-mean(epsilon2))^2)
+                         /nsim)
+  SDmat[niter,3] <- sqrt(sum((omega2-mean(omega2))^2)
+                         /nsim)
+  niter <- niter+1
+}
+
+write.csv(cbind(BIASmat, RMSEmat, SDmat), "mvtnorm.csv")
+```
+  The simulations were created using the *rnorm()* function from the base stats package in *R*. This function creates a random selection from a standard normal distribution wherein the population mean, $\mu$, was set to the means selected and population standard deviation, $\sigma$, was set to 1. *rnorm()* uses Mersenne-Twister random number generator [@Matsumoto1998] as the default. Each mean is created from a separate *rnorm()* distribution, thus, creating individual univariate normal distributions with an unknown relationship between levels. This facet of the simulations is in line with between-subjects ANOVA, as the correlation between levels is not considered with independent group designs. However, if this investigation were to be extended into within-subjects designs, the correlation between levels becomes an interesting manipulation to explore on bias [@Scofield2017]. Alternatively, one can simulate multivariate normal distributions using the *mvtnorm* package [@Genz2017], which allows for creation of a multivariate normal dataset with specific $\mu$ values and covariance matrix. First, the covariance matrix is decomposed using eigenvalues (the default), singular value decomposition, or Cholesky methods. This matrix is then multiplied by a *rnorm()* matrix to create multivariate normal levels that conform to a specified covariance matrix. Since the underlying random number generation is the same for both functions, we expected to find that data generation would not change bias, SD, and RMSE estimations. We simulated 1,000 datasets using *mvtnorm()* with the covariance between levels set to zero, and these results are displayed on Figure \@ref(fig:mvtnorm-graph).
+  
+```{r mvtnorm-graph, echo=FALSE, fig.cap = "Bias, SD, and RMSE values using mvtnorm() function to estimate data simulations. Shaded gray area represents 95% confidence interval around these values.", fig.height=6, fig.width=6}
+numgen = read.csv("mvtnorm.csv")
+
+####bias graph####
+bgraphdatalong = melt(numgen[ , 1:4],
+                      id = "N",
+                      measured = c("eta2B", "epsilon2B", "omega2B"))
+bgraphdatalong$variable = factor(bgraphdatalong$variable, 
+                                 levels = c("epsilon2B", "eta2B", "omega2B"))
+bgraphdatalong$HICI = melt(unname(c(hibeta, hibep, hibom)))$value
+bgraphdatalong$LOCI = melt(unname(c(lobeta, lobep, lobom)))$value
+
+biasline = 
+  ggplot(bgraphdatalong, aes(N, value, 
+                             color = variable,
+                             group = variable)) +
+  geom_line(size=.7) +
+  geom_ribbon(aes(ymin = LOCI, 
+                  ymax = HICI, 
+                  group = variable), 
+              fill = "grey70",
+              color = FALSE,
+              alpha = .4) +
+  coord_cartesian(ylim = c(-.02, .14)) +
+  ylab("Bias") +
+  xlab("Sample Size") + 
+  geom_abline(slope = 0, intercept = 0) +
+  scale_color_manual(name = "Effect Size", 
+                     labels = c("Epsilon", "Eta", "Omega"),
+                     values = c("darkgrey", "black", "grey20")) +
+  cleanup
+
+####rmse graph####
+bgraphdatalong2 = melt(numgen[ , c(1, 5:7)],
+                      id = "N",
+                      measured = c("epsilon2R", "eta2R", "omega2R"))
+bgraphdatalong2$variable = factor(bgraphdatalong2$variable, 
+                                 levels = c("epsilon2R", "eta2R", "omega2R"))
+bgraphdatalong2$HICI = melt(unname(c(hireta, hirep, hirom)))$value
+bgraphdatalong2$LOCI = melt(unname(c(loreta, lorep, lorom)))$value
+
+rmseline = 
+  ggplot(bgraphdatalong2, aes(N, value, 
+                             color = variable,
+                             group = variable)) +
+  geom_line(size=.7) +
+  geom_ribbon(aes(ymin = LOCI, 
+                  ymax = HICI, 
+                  group = variable), 
+              fill = "grey70",
+              color = FALSE,
+              alpha = .4) +
+  coord_cartesian(ylim = c(-.02, .14)) +
+  ylab("RMSE") +
+  xlab("Sample Size") + 
+  geom_abline(slope = 0, intercept = 0) +
+  scale_color_manual(values = c("darkgrey", "black", "grey20")) +
+  cleanup
+
+
+####sd graph####
+bgraphdatalong3 = melt(numgen[ , c(1, 8:10)],
+                      id = "N",
+                      measured = c("epsilon2S", "eta2S", "omega2S"))
+bgraphdatalong3$variable = factor(bgraphdatalong3$variable, 
+                                 levels = c("epsilon2S", "eta2S", "omega2S"))
+bgraphdatalong3$HICI = melt(unname(c(hiseta, hisep, hisom)))$value
+bgraphdatalong3$LOCI = melt(unname(c(loseta, losep, losom)))$value
+
+sdline = 
+  ggplot(bgraphdatalong3, aes(N, value, 
+                             color = variable,
+                             group = variable)) +
+  geom_line(size=.7) +
+  geom_ribbon(aes(ymin = LOCI, 
+                  ymax = HICI, 
+                  group = variable), 
+              fill = "grey70",
+              color = FALSE,
+              alpha = .4) +
+  coord_cartesian(ylim = c(-.02, .14)) +
+  ylab("SD") +
+  xlab("Sample Size") + 
+  geom_abline(slope = 0, intercept = 0) +
+  scale_color_manual(values = c("darkgrey", "black", "grey20")) +
+  cleanup
+
+# arrange plots together
+library(cowplot)
+legend = get_legend(biasline)
+prow <- plot_grid( biasline + theme(legend.position="none"),
+                   rmseline + theme(legend.position="none"),
+                   sdline + theme(legend.position="none"),
+                   legend,
+                   hjust = -1,
+                   nrow = 2
+)
+prow
+
+bgraphdatalong$outhi = bgraphdatalong$value - bgraphdatalong$HICI
+bgraphdatalong$outlo = bgraphdatalong$value - bgraphdatalong$LOCI
+
+bgraphdatalong2$outhi = bgraphdatalong2$value - bgraphdatalong2$HICI
+bgraphdatalong2$outlo = bgraphdatalong2$value - bgraphdatalong2$LOCI
+avgrmsehi =  round(mean(subset(bgraphdatalong2$outhi, bgraphdatalong2$outhi > 0)), 3)
+avgrmselo =  round(mean(subset(bgraphdatalong2$outlo, bgraphdatalong2$outlo < 0)), 3)
+
+bgraphdatalong3$outhi = bgraphdatalong3$value - bgraphdatalong3$HICI
+bgraphdatalong3$outlo = bgraphdatalong3$value - bgraphdatalong3$LOCI
+avgsdlo =  round(mean(subset(bgraphdatalong3$outlo, bgraphdatalong3$outlo < 0)), 3)
+```
+
+  The confidence interval from the previous results are shown on the figure for comparison. All bias values fit within the confidence interval for all three effect sizes. When examining RMSE, $\eta^2$ was slightly higher than the CI at *n* = 10, 20, and 40 with an average overage of < 0.001. $\omega^2$ and $\epsilon^2$ were slightly lower than RMSE values at *n* = 70 and 90, with values averaging < 0.001 under the CI. For SD values, all three effects were slightly lower than the CI at *n* = 70 and 90, again averaging < 0.001. For interested researchers who wish to have more precision over the correlation between levels, especially for within-subjects designs, we suggest using *rmvnorm()*, as the results for bias, RMSE, and SD are congruent with previous research with some small differences. 
+
+Another important consideration for variance overlap measures that are used with ANOVA is the type of sum of squares implemented in the analysis. In this paper, only one-way designs were examined, which limits the influence of type of sum of squares on the effect sizes. We investigated the use of the *ez* library and the *ezANOVA()* function with design size held constant [@Lawrence2017]. An advantage to using the *ezANOVA()* function in *R* is that *type* (i.e. sum of squares) is an argument a user can specify easily, while the *lm()* and *aov()* functions require the use of options to set contrasts. We expected to find minimal to no differences using *ezANOVA()* versus *aov()* but explore this area to show that researchers may use this function as a simple way to investigate the changes in effect size with multiple independent variables. We simulated 1,000 datasets using *rnorm()* and calculated effect sizes using output from *ezANOVA()*, and these results are displayed on Figure \@ref(fig:ez-graph). All three effects were found to be < .001 outside the low end of the bias CI at *n* = 20, and the bias function was less smooth than the original graphs (i.e. Figure 1 portrays an evenly descending function). RMSE and SD values were all within their respective CI values. 
+```{r ez-code, eval=FALSE, include=FALSE}
+library(ez)
+muvec <- c(0.00,0.00,1.20,1.20)
+meanmu <- mean(muvec)
+sigb <- sum((muvec-meanmu)^2)/4
+eta2p <- sigb/(sigb+1)
+k <- length(muvec)
+nsim <- 1000
+njs <- c(10,20,30,40,50,60,70,80,90,100)
+BIASmat <- matrix(NA,nrow=length(njs),ncol=3)
+rownames(BIASmat) <- njs
+colnames(BIASmat) <- c("eta2","epsilon2","omega2")
+RMSEmat <- matrix(NA,nrow=length(njs),ncol=3)
+rownames(RMSEmat) <- njs
+colnames(RMSEmat) <- c("eta2","epsilon2","omega2")
+SDmat <- matrix(NA,nrow=length(njs),ncol=3)
+rownames(SDmat) <- njs
+colnames(SDmat) <- c("eta2","epsilon2","omega2")
+niter <- 1
+  
+for (nj in njs){
+  x <- matrix(NA,nrow=nj,ncol=4)
+  eta2 <- rep(NA,nsim)
+  epsilon2 <- rep(NA,nsim)
+  omega2 <- rep(NA,nsim)
+  for (ii in 1: nsim){
+    y <- c(rnorm(n=nj,mean=muvec[1],sd=1),
+           rnorm(n=nj,mean=muvec[2],sd=1),
+           rnorm(n=nj,mean=muvec[3],sd=1),
+           rnorm(n=nj,mean=muvec[4],sd=1))
+    x <- as.factor(c(rep("mu1",nj),rep("mu2",nj),
+                     rep("mu3",nj),rep("mu4",nj)))
+    
+    combo = cbind.data.frame(x,y)
+    combo$partno = as.factor(1:nrow(combo))
+    
+    res = ezANOVA(data = combo,
+                  dv = y,
+                  wid = partno,
+                  between = x,
+                  type = 3,
+                  detailed = T)
+    
+    #res <- anova(aov(y~x))
+    #res <- as.matrix(res)
+    #SSb <- res[1,2]
+    #SSt <- res[1,2] + res[2,2]
+    #MSw <- res[2,3]
+    
+    SSb = res$ANOVA$SSn[2]
+    SSt = res$ANOVA$SSn[2] + res$ANOVA$SSd[2]
+    MSw = res$ANOVA$SSd[2] / res$ANOVA$DFd[2]
+    
+    eta2[ii] <- SSb/SSt
+    epsilon2[ii] <- (SSb - 3*MSw)/SSt
+    omega2[ii] <- (SSb - 3*MSw)/(SSt+MSw)
+  }  
+  BIASmat[niter,1] <- mean(eta2) - eta2p
+  BIASmat[niter,2] <- mean(epsilon2) - eta2p
+  BIASmat[niter,3] <- mean(omega2) - eta2p
+  RMSEmat[niter,1] <- sqrt(sum((eta2-eta2p)^2)/nsim)
+  RMSEmat[niter,2] <- sqrt(sum((epsilon2-eta2p)^2)/nsim)
+  RMSEmat[niter,3] <- sqrt(sum((omega2-eta2p)^2)/nsim)
+  SDmat[niter,1] <- sqrt(sum((eta2-mean(eta2))^2)/nsim)
+  SDmat[niter,2] <- sqrt(sum((epsilon2-mean(epsilon2))^2)
+                         /nsim)
+  SDmat[niter,3] <- sqrt(sum((omega2-mean(omega2))^2)
+                         /nsim)
+  niter <- niter+1
+}
+
+write.csv(cbind(BIASmat, RMSEmat, SDmat), "ez_anova.csv")
+
+```
+
+```{r ez-graph, echo=FALSE, fig.cap = "Bias, SD, and RMSE values using ezANOVA() function to estimate ANOVAs. Shaded gray area represents 95% confidence interval around these values.", fig.height=6, fig.width=6}
+ezaov = read.csv("ez_anova.csv")
+
+####bias graph####
+bgraphdatalong = melt(ezaov[ , 1:4],
+                      id = "N",
+                      measured = c("eta2B", "epsilon2B", "omega2B"))
+bgraphdatalong$variable = factor(bgraphdatalong$variable, 
+                                 levels = c("epsilon2B", "eta2B", "omega2B"))
+bgraphdatalong$HICI = melt(unname(c(hibeta, hibep, hibom)))$value
+bgraphdatalong$LOCI = melt(unname(c(lobeta, lobep, lobom)))$value
+
+biasline = 
+  ggplot(bgraphdatalong, aes(N, value, 
+                             color = variable,
+                             group = variable)) +
+  geom_line(size=.7) +
+  geom_ribbon(aes(ymin = LOCI, 
+                  ymax = HICI, 
+                  group = variable), 
+              fill = "grey70",
+              color = FALSE,
+              alpha = .4) +
+  coord_cartesian(ylim = c(-.02, .14)) +
+  ylab("Bias") +
+  xlab("Sample Size") + 
+  geom_abline(slope = 0, intercept = 0) +
+  scale_color_manual(name = "Effect Size", 
+                     labels = c("Epsilon", "Eta", "Omega"),
+                     values = c("darkgrey", "black", "grey20")) +
+  cleanup
+
+####rmse graph####
+bgraphdatalong2 = melt(ezaov[ , c(1, 5:7)],
+                      id = "N",
+                      measured = c("epsilon2R", "eta2R", "omega2R"))
+bgraphdatalong2$variable = factor(bgraphdatalong2$variable, 
+                                 levels = c("epsilon2R", "eta2R", "omega2R"))
+bgraphdatalong2$HICI = melt(unname(c(hireta, hirep, hirom)))$value
+bgraphdatalong2$LOCI = melt(unname(c(loreta, lorep, lorom)))$value
+
+rmseline = 
+  ggplot(bgraphdatalong2, aes(N, value, 
+                             color = variable,
+                             group = variable)) +
+  geom_line(size=.7) +
+  geom_ribbon(aes(ymin = LOCI, 
+                  ymax = HICI, 
+                  group = variable), 
+              fill = "grey70",
+              color = FALSE,
+              alpha = .4) +
+  coord_cartesian(ylim = c(-.02, .14)) +
+  ylab("RMSE") +
+  xlab("Sample Size") + 
+  geom_abline(slope = 0, intercept = 0) +
+  scale_color_manual(values = c("darkgrey", "black", "grey20")) +
+  cleanup
+
+
+####sd graph####
+bgraphdatalong3 = melt(ezaov[ , c(1, 8:10)],
+                      id = "N",
+                      measured = c("epsilon2S", "eta2S", "omega2S"))
+bgraphdatalong3$variable = factor(bgraphdatalong3$variable, 
+                                 levels = c("epsilon2S", "eta2S", "omega2S"))
+bgraphdatalong3$HICI = melt(unname(c(hiseta, hisep, hisom)))$value
+bgraphdatalong3$LOCI = melt(unname(c(loseta, losep, losom)))$value
+
+sdline = 
+  ggplot(bgraphdatalong3, aes(N, value, 
+                             color = variable,
+                             group = variable)) +
+  geom_line(size=.7) +
+  geom_ribbon(aes(ymin = LOCI, 
+                  ymax = HICI, 
+                  group = variable), 
+              fill = "grey70",
+              color = FALSE,
+              alpha = .4) +
+  coord_cartesian(ylim = c(-.02, .14)) +
+  ylab("SD") +
+  xlab("Sample Size") + 
+  geom_abline(slope = 0, intercept = 0) +
+  scale_color_manual(values = c("darkgrey", "black", "grey20")) +
+  cleanup
+
+# arrange plots together
+library(cowplot)
+legend = get_legend(biasline)
+prow <- plot_grid( biasline + theme(legend.position="none"),
+                   rmseline + theme(legend.position="none"),
+                   sdline + theme(legend.position="none"),
+                   legend,
+                   hjust = -1,
+                   nrow = 2
+)
+prow
+
+bgraphdatalong$outhi = bgraphdatalong$value - bgraphdatalong$HICI
+bgraphdatalong$outlo = bgraphdatalong$value - bgraphdatalong$LOCI
+avgbiaslo =  round(mean(subset(bgraphdatalong$outlo, bgraphdatalong$outlo < 0)), 3)
+
+bgraphdatalong2$outhi = bgraphdatalong2$value - bgraphdatalong2$HICI
+bgraphdatalong2$outlo = bgraphdatalong2$value - bgraphdatalong2$LOCI
+
+bgraphdatalong3$outhi = bgraphdatalong3$value - bgraphdatalong3$HICI
+bgraphdatalong3$outlo = bgraphdatalong3$value - bgraphdatalong3$LOCI
+```
+
+  Our manipulations of data generation and analysis did not appear to change the basic results of @Okada2013, and these results provide code options to researchers who might wish to manipulate factors such as sum of squares or level correlations.
+
+# Results
+
+## Type of Effect Size
+```{r}
+##regardless of anything else make a graph of bias and SD
+##Sample size is the X axis
+##Bias/SD is the Y axis
+##Use type of effect size as the grouping variable 
+```
+
+## Experimental Design
+
+### Between Subjects v. Repeated Measures 
+```{r}
+##regardless of anything else make a graph of bias and SD
+##Sample size is the X axis
+##Bias/SD is the Y axis
+##Use type of effect size as the grouping variable
+##do a four panel graph two RM two BN
+```
+
+### One Way v. Two Way Designs
+```{r}
+##regardless of anything else make a graph of bias and SD
+##Sample size is the X axis
+##Bias/SD is the Y axis
+##Use type of effect size as the grouping variable
+##do a four panel graph two one way and two two way 
+
+##we may also be able to do this graph as type of effect size as one giant variable for one way and two way and do the dashed line thing, but let's see how the first one comes out
+```
+
+### Levels 
+```{r}
+##regardless of anything else make a graph of bias and SD
+##Sample size is the X axis
+##Bias/SD is the Y axis
+##Use type of effect size as the grouping variable
+##Not sure if I remember how many levels there are ... I would say separate graphs for each set of levels but IDK here
+```
+
+### Correlation  
+```{r}
+##regardless of anything else make a graph of bias and SD
+##Sample size is the X axis
+##Bias/SD is the Y axis
+##Use type of effect size as the grouping variable
+##Ok so here the only thing that's going to matter is the RM designs since BN designs don't care - so I might filter out BN ? 
+##Not sure we want to do 6 sets of graphs here ... ? maybe that cool dot plot thing I did before? IDK on this one right now either. 
+```
+
+## Interactive Effects of Research Design
+
+# Discussion
+
+Next, data generation functions were then compared, as means of illustrating options for future researchers in this area. The original datasets and expected confidence interval were created using the *rnorm()* function as a comparison point. This function randomly selects from a standard normal distribution with prespecified means and standard deviations. An alternative option is to simulate multivariate normal distributions with the function *mvtnorm()*, which allows for multivariate normal datasets, with prespecified means as well as a covariance matrix. We then simulated 1,000 datasets using *mvtnorm()* with covariance levels set to zero, to create unrelated between-subjects levels. All bias values found fit within the confidence intervals for all three effect sizes. RMSE and SD had slight differences in variation at a few sample sizes with values < .001 outside the confidence interval. However, we suggest that the use of *rmvnorm()* is appropriate, as the results for bias, RMSE, and SD are consistent with previous research findings, albeit with minor differences. 
+  
+  Last, as part of data analysis, we also expect to expand these results into multiple independent variable designs [@Scofield2017]; therefore, the type of sum of squares used in ANOVA was also considered. Using the *ezANOVA()* function, the type of sum of squares can be specified easily, while functions like *lm()* and *aov()* require using separate commands to set desired contrasts. Another set of 1,000 simulations were analyzed using *ezANOVA()*. $\eta^2$, $\epsilon^2$, and $\omega^2$ were all found to be less than .001 outside of the low end of the confidence interval for bias when *n* = 20. As seen in Figure \@ref(fig:ez-graph), the bias function is less smooth than original graphs found in @Okada2013. RMSE and SD values were all within respective confidence intervals. Overall, manipulations of different types of data generation and analysis do not change main conclusions from @Okada2013. These results, in conclusion, provide more freedom for researchers who desire to manipulate types of sum of squares or level correlations in data generation and analysis.
+
+\newpage
+
+# References
+```{r create_r-references}
+r_refs(file = "r-references.bib")
+```
+
+\setlength{\parindent}{-0.5in}
+\setlength{\leftskip}{0.5in}

@@ -1,0 +1,120 @@
+---
+title             : "The title"
+shorttitle        : "Title"
+
+author: 
+  - name          : "First Author"
+    affiliation   : "1"
+    corresponding : yes    # Define only one corresponding author
+    address       : "Postal address"
+    email         : "my@email.com"
+  - name          : "Ernst-August Doelle"
+    affiliation   : "1,2"
+
+affiliation:
+  - id            : "1"
+    institution   : "Wilhelm-Wundt-University"
+  - id            : "2"
+    institution   : "Konstanz Business School"
+
+author_note: |
+  Add complete departmental affiliations for each author here. Each new line herein must be indented, like this line.
+
+  Enter author note here.
+
+abstract: |
+  Enter abstract here. Each new line herein must be indented, like this line.
+  
+keywords          : "keywords"
+wordcount         : "X"
+
+bibliography      : ["r-references.bib"]
+
+figsintext        : no
+figurelist        : no
+tablelist         : no
+footnotelist      : no
+lineno            : yes
+mask              : no
+
+class             : "man"
+output            : papaja::apa6_pdf
+---
+
+```{r load_packages, include = FALSE}
+library("papaja")
+```
+
+Similar style introduction as the bias1 paper:
+- p values are bad and we shouldn't do it
+- NHST has it's flaws
+- psychology's glorious new era
+
+effect size
+- these are a good idea
+- what are variance overlap statistics
+- talk about the newer statistics and why we use them (eta, omega, ges families)
+
+limitations on effect size
+- they are biased!
+- that bias has consequences for sample size planning and such
+
+current study
+
+# Method
+
+## Simulations
+talk about all the variables and stuff here
+formulas
+manipulated variables = 
+- sample size
+- design type
+- effect size type
+- effect size size
+- correlation
+- levels
+
+# Results
+
+I picked the variables because we already are pretty clear of the effects of sample size and then I figured we could graph each of the 5 effect sizes across sample size with a three part cowplot for small medium and large effects. 
+
+## Bias of Effects
+
+### Levels
+
+talk here about bias by number of levels examining the bias X effect size type X effect size across sample size 
+
+### Design Type
+
+talk here about bias by the type of design examining the bias X effect size type X effect size across sample size
+
+### Correlation specifically RM since BN doesn't matter
+
+talk here about bias by correlation examining the bias X effect size type X effect size across sample size 
+
+## Power and Sample Size Planning
+
+within each crazy way combination we figured out bias, then calculated the difference in sample size blah blah blah.
+
+### Levels
+
+### Design Type
+
+### Correlation 
+
+# Discussion
+
+
+\newpage
+
+# References
+```{r create_r-references}
+r_refs(file = "r-references.bib")
+```
+
+\begingroup
+\setlength{\parindent}{-0.5in}
+\setlength{\leftskip}{0.5in}
+
+<div id = "refs"></div>
+\endgroup
